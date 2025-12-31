@@ -14,6 +14,7 @@ import com.ahmadthakur.kaze.R
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,6 +32,7 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var soundManager: SoundManager
 
+    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         soundManager = SoundManager(this)
@@ -56,7 +58,7 @@ class MainActivity : ComponentActivity() {
 
         sounds.forEach { soundManager.registerSound(it) }
 
-        // Do NOT auto-start sounds; user will control playback via bottom bar or per-item slider
+        // Do NOT auto-start sounds; user will control playback via top FAB or per-item slider
 
         // Compose UI
         setContent {
@@ -64,153 +66,140 @@ class MainActivity : ComponentActivity() {
                 var masterPlaying by remember { mutableStateOf(false) }
 
                 Scaffold(
-                    // Floating action button is the single play/pause control now.
-                    floatingActionButton = {
-                        FloatingActionButton(onClick = {
-                            val newState = !masterPlaying
-                            masterPlaying = newState
-                            Log.d(TAG, "FAB play/pause clicked -> $newState")
-                            if (newState) {
-                                // start all sounds that have volume > 0
-                                sounds.filter { it.volume > 0f }.forEach {
-                                    Log.d(TAG, "FAB play -> enabling ${it.id} (volume=${it.volume})")
-                                    soundManager.enableSound(it.id)
+                    topBar = {
+                        TopAppBar(
+                            title = {
+                                Column {
+                                    Text(text = "Kaze", style = MaterialTheme.typography.titleLarge)
+                                    val playingCount = soundManager.activeCount
+                                    Text(text = "Playing: $playingCount", style = MaterialTheme.typography.bodySmall)
                                 }
-                            } else {
-                                Log.d(TAG, "FAB pause -> stopping all")
-                                soundManager.stopAll()
                             }
-                        }) {
-                            val icon = if (masterPlaying) R.drawable.ic_pause else R.drawable.ic_play
-                            Image(
-                                painter = painterResource(id = icon),
-                                contentDescription = if (masterPlaying) "Pause all" else "Play enabled",
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
+                        )
                     },
-                    // Bottom bar: only display the number of sounds currently playing
-                    bottomBar = {
-                        Surface(shadowElevation = 4.dp, tonalElevation = 4.dp) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(8.dp),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                val playingCount = soundManager.activeCount
-                                Text(text = "Playing: $playingCount")
-                            }
-                        }
-                    }
-                ) { innerPadding ->
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding),
-                        color = MaterialTheme.colorScheme.background
-                    ) {
-                        SoundListUI(sounds, soundManager, masterPlaying) {
-                            // onStartRequested: set masterPlaying true when user raises a volume
-                            if (!masterPlaying) {
-                                Log.d(TAG, "Start requested by volume change")
-                                masterPlaying = true
-                                sounds.filter { it.volume > 0f }.forEach { soundManager.enableSound(it.id) }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
+                     // Floating action button is the single play/pause control now.
+                     floatingActionButton = {
+                         FloatingActionButton(onClick = {
+                             val newState = !masterPlaying
+                             masterPlaying = newState
+                             Log.d(TAG, "FAB play/pause clicked -> $newState")
+                             if (newState) {
+                                 // start all sounds that have volume > 0
+                                 sounds.filter { it.volume > 0f }.forEach {
+                                     Log.d(TAG, "FAB play -> enabling ${it.id} (volume=${it.volume})")
+                                     soundManager.enableSound(it.id)
+                                 }
+                             } else {
+                                 Log.d(TAG, "FAB pause -> stopping all")
+                                 soundManager.stopAll()
+                             }
+                         }) {
+                             val icon = if (masterPlaying) R.drawable.ic_pause else R.drawable.ic_play
+                             Image(
+                                 painter = painterResource(id = icon),
+                                 contentDescription = if (masterPlaying) "Pause all" else "Play enabled",
+                                 modifier = Modifier.size(24.dp)
+                             )
+                         }
+                     },
+                 ) { innerPadding ->
+                     Surface(
+                         modifier = Modifier
+                             .fillMaxSize()
+                             .padding(innerPadding),
+                         color = MaterialTheme.colorScheme.background
+                     ) {
+                         SoundListUI(sounds, soundManager, masterPlaying) {
+                             // onStartRequested: set masterPlaying true when user raises a volume
+                             if (!masterPlaying) {
+                                 Log.d(TAG, "Start requested by volume change")
+                                 masterPlaying = true
+                                 sounds.filter { it.volume > 0f }.forEach { soundManager.enableSound(it.id) }
+                             }
+                         }
+                     }
+                 }
+             }
+         }
+     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        soundManager.stopAll()
-    }
-}
+     override fun onDestroy() {
+         super.onDestroy()
+         soundManager.stopAll()
+     }
+ }
 
-@Composable
-fun SoundListUI(sounds: List<Sound>, soundManager: SoundManager, masterPlaying: Boolean, onStartRequested: () -> Unit) {
-    Column(modifier = Modifier
-        .fillMaxSize()
-        .verticalScroll(rememberScrollState())
-        .padding(16.dp)) {
+ @Composable
+ fun SoundListUI(sounds: List<Sound>, soundManager: SoundManager, masterPlaying: Boolean, onStartRequested: () -> Unit) {
+     Column(modifier = Modifier
+         .fillMaxSize()
+         .verticalScroll(rememberScrollState())
+         .padding(16.dp)) {
 
-        Text(
-            text = "Kaze Ambient Sounds",
-            style = MaterialTheme.typography.headlineMedium,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
+         // Title moved to top app bar; keep a small spacer for breathing room
+         Spacer(modifier = Modifier.height(8.dp))
 
-        sounds.forEach { sound ->
-            // Read observable states directly
-            val volume = sound.volume
+         sounds.forEach { sound ->
+             // Read observable states directly
+             val volume = sound.volume
 
-            Card(modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 6.dp)) {
-                Column(modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp)) {
+             Card(modifier = Modifier
+                 .fillMaxWidth()
+                 .padding(vertical = 6.dp)) {
+                 Column(modifier = Modifier
+                     .fillMaxWidth()
+                     .padding(12.dp)) {
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        if (sound.iconRes != 0) {
-                            Image(
-                                painter = painterResource(id = sound.iconRes),
-                                contentDescription = sound.label,
-                                modifier = Modifier.size(40.dp),
-                                contentScale = ContentScale.Fit
-                            )
-                        } else {
-                            Box(modifier = Modifier
-                                .size(40.dp)
-                                .background(Color.LightGray))
-                        }
+                     Row(
+                         verticalAlignment = Alignment.CenterVertically,
+                         modifier = Modifier.fillMaxWidth()
+                     ) {
+                         if (sound.iconRes != 0) {
+                             Image(
+                                 painter = painterResource(id = sound.iconRes),
+                                 contentDescription = sound.label,
+                                 modifier = Modifier.size(40.dp),
+                                 contentScale = ContentScale.Fit
+                             )
+                         } else {
+                             Box(modifier = Modifier
+                                 .size(40.dp)
+                                 .background(Color.LightGray))
+                         }
 
-                        Spacer(modifier = Modifier.width(12.dp))
+                         Spacer(modifier = Modifier.width(12.dp))
 
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = sound.label,
-                                style = MaterialTheme.typography.titleMedium
-                            )
-                            if (sound.playing) {
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(text = "Playing", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                            }
-                        }
+                         Column(modifier = Modifier.weight(1f)) {
+                             Text(
+                                 text = sound.label,
+                                 style = MaterialTheme.typography.titleMedium
+                             )
+                         }
+                     }
 
-                        // Removed toggle: 0 volume is off. User uses slider to control volume.
-                    }
+                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Slider(
-                        value = volume,
-                        onValueChange = { v ->
-                            // update model and persist
-                            sound.volume = v
-                            soundManager.setVolume(sound.id, v)
-                            if (v > 0f) {
-                                // start this sound immediately
-                                soundManager.enableSound(sound.id)
-                                // ensure master is playing
-                                onStartRequested()
-                            } else {
-                                // slider set to 0 -> stop this sound
-                                soundManager.disableSound(sound.id)
-                            }
-                        },
-                        valueRange = 0f..1f,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-        }
-    }
-}
+                     Slider(
+                         value = volume,
+                         onValueChange = { v ->
+                             // update model and persist
+                             sound.volume = v
+                             soundManager.setVolume(sound.id, v)
+                             if (v > 0f) {
+                                 // start this sound immediately
+                                 soundManager.enableSound(sound.id)
+                                 // ensure master is playing
+                                 onStartRequested()
+                             } else {
+                                 // slider set to 0 -> stop this sound
+                                 soundManager.disableSound(sound.id)
+                             }
+                         },
+                         valueRange = 0f..1f,
+                         modifier = Modifier.fillMaxWidth()
+                     )
+                 }
+             }
+         }
+     }
+ }
